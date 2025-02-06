@@ -1,1 +1,191 @@
+#define adc1 A0
+#define adc2 A1
+#define adc3 A2
+#define adc4 A3
+#define adc5 A4
+#define adc6 A5
+#define buzzer 11
+#define ledd 13
+int flex2=0,flex1=0,flex3=0,flex4=0,flex5=0,flex6=0;
+void setup() 
+{  
+ pinMode(ledd,OUTPUT);
+  pinMode(buzzer,OUTPUT);
+  digitalWrite(buzzer,HIGH);
 
+  delay(1000);
+  digitalWrite(buzzer,LOW);
+   digitalWrite(ledd,HIGH);
+ Serial.begin(9600 );
+ //Serial.println("Initialize MPU6050");
+}
+void loop()
+{
+  delay(800);
+  flex1=analogRead(adc1);
+  flex2=analogRead(adc2);
+  flex3=analogRead(adc3);
+  flex4=analogRead(adc4);
+  flex5=analogRead(adc5);
+  flex6=analogRead(adc6);
+  delay(10);
+  // ff(); // testing
+  delay(300);// 180  220  150  160 180  180
+  if((flex1<135)&&(flex2<145)&&(flex3<145)&&(flex4<85)&&(flex5<150)&&(flex6<170))
+  {
+    digitalWrite(buzzer,HIGH);
+   Serial.println("");
+  }
+
+  // else if((flex1<135)&&(flex3<145)&&(flex4<100)&&(flex5<150)&&(flex6<170))
+  // {
+  //  Serial.print("y");digitalWrite(buzzer,LOW);
+  // }
+
+  // else if((flex1<115)&&(flex2<150)&&(flex3<145)&&(flex4<100)&&(flex5<150))
+  // {
+  //  Serial.print("q");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<135)&&(flex3<145)&&(flex5<150)&&(flex6<170))
+  // {
+  //  Serial.print("z");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<115)&&(flex3<210)&&(flex4<100)&&(flex6<170))
+  // {
+  //  Serial.print("x");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex2<145)&&(flex4<100)&&(flex5<150)&&(flex6<170))
+  // {
+  //  Serial.print("w");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<115)&&(flex2<145)&&(flex3<145)&&(flex6<170))
+  // {
+  //  Serial.print("v");digitalWrite(buzzer,HIGH);
+  // }
+
+  else if((flex2<145)&&(flex3<155)&&(flex4<100)&&(flex5<150))
+  {
+   Serial.print("t");digitalWrite(buzzer,HIGH);
+  }
+
+  // else if((flex1<135)&&(flex2<145)&&(flex3<145)&&(flex5<150))
+  // {
+  //  Serial.print("r");digitalWrite(buzzer,HIGH);
+  // } 
+
+  // else if((flex1<110)&&(flex2<145)&&(flex3<145)&&(flex4<85))
+  // {
+  //  Serial.print("p");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<135)&&(flex3<145)&&(flex4<85)&&(flex5<150))
+  // {
+  //  Serial.print("n");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<115)&&(flex2<145)&&(flex4<100)&&(flex5<150))
+  // {
+  //  Serial.print("g");digitalWrite(buzzer,HIGH);
+  // }
+
+//    else if((flex1<115)&&(flex4<115)&&(flex5<160))
+//   {
+//   Serial.print("d");digitalWrite(buzzer,HIGH);
+
+//  }
+
+  // else if((flex1<115)&&(flex2<145)&&(flex4<100))
+  // {
+  //  Serial.print("f");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<115)&&(flex2<145)&&(flex5<150))
+  // {
+  //  Serial.print("h");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex2<145)&&(flex4<100)&&(flex5<150))
+  // {
+  //  Serial.print("j");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<115)&&(flex2<145)&&(flex3<145))
+  // {
+  //  Serial.print("l");digitalWrite(buzzer,HIGH);
+  // }
+
+
+  // else if((flex1<115)&&(flex3<145)&&(flex4<85))
+  // {
+  //  Serial.print("m");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<135)&&(flex3<145)&&(flex5<150))
+  // {
+  //  Serial.print("o");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex2<145)&&(flex3<145)&&(flex4<100))
+  // {
+  //  Serial.print("s");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<135)&&(flex3<145)&&(flex6<170))
+  // {
+  //  Serial.print("u");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex3<145)&&(flex4<85))
+  // {
+  //  Serial.print(" ");digitalWrite(buzzer,HIGH);
+  // }
+
+  else if((flex1<96)&&(flex2<145))
+  {
+   Serial.print("b");digitalWrite(buzzer,HIGH);
+  }
+
+  else if((flex1<115)&&(flex4<95))
+  {
+   Serial.print("c");digitalWrite(buzzer,HIGH);
+  }
+
+  // else if((flex1<150)&&(flex5<150))
+  // {
+  //  Serial.print("e");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex1<135)&&(flex3<145))
+  // {
+  //  Serial.print("k");digitalWrite(buzzer,HIGH);
+  // }
+
+  // else if((flex2<145)&&(flex4<100))
+  // {
+  //  Serial.print("i");digitalWrite(buzzer,HIGH);
+  // }
+  else if(flex1<96)  
+  {
+   Serial.print("a");digitalWrite(buzzer,HIGH); 
+  }
+  delay(200);digitalWrite(buzzer,LOW);
+}
+
+void ff()
+{
+   Serial.print(flex1);
+  Serial.print("-");
+  Serial.print(flex2);
+  Serial.print("-");
+  Serial.print(flex3);
+  Serial.print("-");
+  Serial.print(flex4);
+  Serial.print("-");
+  Serial.print(flex5);
+  Serial.print("-");
+  Serial.println(flex6);  
+}
