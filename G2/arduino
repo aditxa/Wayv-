@@ -14,6 +14,15 @@
 #define m6 2
 #define mod 8
 int flex2=0,flex1=0,flex3=0,flex4=0,flex5=0,flex6=0,swt;
+
+bool introDone = false;
+void vibrateFinger(int finger, int duration) {
+  digitalWrite(finger, HIGH);
+  delay(duration);
+  digitalWrite(finger, LOW);
+  delay(100);
+}
+
 void setup() 
 {  
  pinMode(mod,INPUT_PULLUP);
@@ -25,15 +34,38 @@ void setup()
   pinMode(m4,OUTPUT);
   pinMode(m5,OUTPUT);
   pinMode(m6,OUTPUT);
+
   digitalWrite(buzzer,HIGH);
   delay(1000);
   digitalWrite(buzzer,LOW);
    digitalWrite(ledd,HIGH);
+
  Serial.begin(9600 );
  //Serial.println("Initialize MPU6050");
 }
+
 void loop()
 {
+    if (Serial.available() > 0) {
+    char received = Serial.read();
+    
+    switch(received) {
+      case '1': vibrateFinger(m1, 1800); break;
+      case '2': vibrateFinger(m2, 1800); break;
+      case '3': vibrateFinger(m3, 1800); break;
+      case '4': vibrateFinger(m4, 1800); break;
+      case '5': vibrateFinger(m5, 1800); break;
+      case '6': vibrateFinger(m6, 1800); break;
+      case 'X': 
+        digitalWrite(m1, LOW);
+        digitalWrite(m2, LOW);
+        digitalWrite(m3, LOW);
+        digitalWrite(m4, LOW);
+        digitalWrite(m5, LOW);
+        digitalWrite(m6, LOW);
+        break;
+    }
+  }
   flex1=analogRead(adc1);
   flex2=analogRead(adc2);
   flex3=analogRead(adc3);
