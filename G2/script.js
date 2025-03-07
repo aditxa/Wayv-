@@ -1,7 +1,60 @@
 if ("serial" in navigator) {
+    class BrailleModel {
+        constructor() {
+            this.model = null;
+            this.initialized = false;
+        }
+    
+        async initialize() {
+            this.model = tf.sequential({
+                layers: [
+                    tf.layers.dense({units: 8, activation: 'relu', inputShape: [4]}),
+                    tf.layers.dense({units: 16, activation: 'relu'}),
+                    tf.layers.dense({units: 8, activation: 'softmax'})
+                ]
+            });
+            
+            this.model.compile({
+                optimizer: 'adam',
+                loss: 'categoricalCrossentropy',
+                metrics: ['accuracy']
+            });
+            
+            this.initialized = true;
+            console.log('Model initialized');
+        }
+    
+        async predict(userMetrics) {
+            if (!this.initialized) return null;
+            
+            const input = tf.tensor2d([
+                [
+                    userMetrics.accuracy,
+                    userMetrics.competency,
+                    userMetrics.avgLatency,
+                    userMetrics.errorPattern
+                ]
+            ]);
+            
+            const prediction = this.model.predict(input);
+            return prediction.dataSync();
+        }
+    
+        async train(data) {
+            const xs = tf.tensor2d(data.map(d => d.input));
+            const ys = tf.tensor2d(data.map(d => d.output));
+            
+            await this.model.fit(xs, ys, {
+                epochs: 50,
+                batchSize: 8,
+                shuffle: true
+            });
+        }
+    }
     class BrailleTeacher {
         constructor() {
             this.port = null;
+            this.introDone = false;
             this.reader = null;
             this.mode = "learning";
             this.currentLetterIndex = 0;
@@ -30,6 +83,11 @@ if ("serial" in navigator) {
             this.initializeEventListeners();
             this.initProgressChart();
             this.initializeSpeechRecognition();
+            this.brailleModel = new BrailleModel();
+            this.trainingData = [];
+            this.userHistory = [];
+            this.errorPattern = Array(6).fill(0); // Track errors per Braille dot
+            this.brailleModel.initialize();
         }
 
         initializeSpeechRecognition() {
@@ -43,10 +101,10 @@ if ("serial" in navigator) {
                     const command = event.results[last][0].transcript.trim().toLowerCase();
                     if (command.includes("learning mode") || command.includes("learning")) {
                         this.switchMode("learning");
-                        this.speak("Switching to learning mode");
+                        // this.speak("Switching to learning mode");
                     } else if (command.includes("practice mode") || command.includes("practice")) {
                         this.switchMode("practice");
-                        this.speak("Switching to practice mode");
+                        // this.speak("Switching to practice mode");
                     }
                 };
                 this.recognition.onerror = (event) => {
@@ -76,17 +134,7 @@ if ("serial" in navigator) {
             }
         }
 
-        // switchMode(newMode) {
-        //     this.mode = newMode;
-        //     document.getElementById("modeSelect").value = newMode;
-        //     this.resetState();
-        //     if (this.mode === "learning") {
-        //         this.speak(`Switching to learning mode. Start with letter ${this.alphabet[0].toUpperCase()}.`);
-        //     } else if (this.mode === "practice") {
-        //         this.speak("Switching to practice mode.");
-        //         setTimeout(() => this.announceCurrentWord(), 1000);
-        //     }
-        // }
+
 
         switchMode(newMode) {
             this.mode = newMode;
@@ -108,14 +156,46 @@ if ("serial" in navigator) {
                 const decoder = new TextDecoderStream();
                 this.port.readable.pipeTo(decoder.writable);
                 this.reader = decoder.readable.getReader();
+
+                if (!this.introDone) {
+                    await this.playIntroduction();
+                    this.introDone = true;
+                }
+
                 this.showStatus("Connected successfully!");
-                this.speak("Connected successfully!");
+                // this.speak("Connected successfully!");
                 this.readSerialData();
                 this.startListening();
             } catch (error) {
                 this.showStatus(`Connection failed: ${error.message}`);
             }
         }
+// newww introduction fucntion 
+        async playIntroduction() {
+            const writer = this.port.writable.getWriter();
+            const fingers = [
+                {num: 1, desc: "left ring finger"},
+                {num: 2, desc: "left middle finger"},
+                {num: 3, desc: "left index finger"},
+                {num: 4, desc: "right index finger"},
+                {num: 5, desc: "right middle finger"},
+                {num: 6, desc: "right ring finger"}
+            ];
+    
+            this.speak("The finger mappings are",1800);
+            
+            for (const finger of fingers) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await writer.write(new TextEncoder().encode(finger.num.toString()));
+                this.speak(`${finger.num} is your ${finger.desc}`);
+                await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            await writer.write(new TextEncoder().encode('X'));
+            writer.releaseLock();
+            // this.speak("Voice commands are now active.");
+        }
+            
 
         async readSerialData() {
             try {
@@ -162,7 +242,7 @@ if ("serial" in navigator) {
         //     return currentLetter.toUpperCase();
         // }
 
-        handleLearningMode(data) {
+        async handleLearningMode(data) {
             const currentLetter = this.alphabet[this.currentLetterIndex];
             if (data.toLowerCase() === currentLetter) {
                 this.speak(`It is Correct!`);
@@ -179,10 +259,30 @@ if ("serial" in navigator) {
             } else {
                 // Added clear correction instruction
                 this.speak(`  It is Incorrect. Please fold ${this.alphabetFolds[currentLetter]} for ${currentLetter.toUpperCase()}.`);
+                const dots = this.alphabetFolds[currentLetter].match(/\d/g);
+                dots.forEach(d => this.errorPattern[parseInt(d)-1]++);
             }
             this.totalInputs++;
             this.updateProgressChart();
-            return currentLetter.toUpperCase();
+            const metrics = this.collectMetrics();
+            this.userHistory.push(metrics);
+            
+            // Store in localStorage
+            localStorage.setItem('brailleData', JSON.stringify(this.userHistory));
+            
+            // Get AI recommendation
+            const recommendation = await this.getRecommendation(metrics)
+            return currentLetter.toUpperCase();  
+        }
+
+        collectMetrics() {
+            return {
+                accuracy: this.correctInputs / this.totalInputs,
+                competency: this.calculateCompetency(),
+                latency: this.calculateLatency(),
+                errorPattern: [...this.errorPattern],
+                timestamp: Date.now()
+            };
         }
 
         handlePracticeMode(data) {
