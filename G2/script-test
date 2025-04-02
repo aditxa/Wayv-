@@ -1,88 +1,144 @@
 if ("serial" in navigator) {
-    class DataCollector {
-        constructor() {
-            this.sessionId = Date.now();
-            this.data = [];
-            this.lastPromptTime = 0;
-            this.currentMetrics = {
-                accuracy: 0,
-                errors: {}, // Format: {targetLetter: {wrongInput: count}}
-                latency: 0,
-                attempts: 0,
-                mode: "learning",
-                timestamp: 0,
-                currentTarget: "",
-                correct: false
-            };
+    // Performance tracking variables
+    let sessionData = [];
+    let currentAttempts = {};
+    let sessionStartTime = Date.now();
+    let audioEndTime = 0;
+    let totalInputs = 0;
+    let correctInputs = 0;
+
+    // Track error counts per mode and letter
+    const errorCounts = {
+        learning: {},
+        practice: {}
+    };
+    // Initialize error counts for all letters in both modes
+    "abcdefghijklmnopqrstuvwxyz".split("").forEach(letter => {
+        errorCounts.learning[letter] = 0;
+        errorCounts.practice[letter] = 0;
+    });
+    // Record user attempt
+    function recordAttempt(mode, targetLetter, input, isCorrect) {
+        const timestamp = new Date().toISOString();
+        const latency = Date.now() - audioEndTime;
+        
+        if (!currentAttempts[targetLetter]) {
+            currentAttempts[targetLetter] = 1;
+        } else {
+            currentAttempts[targetLetter]++;
+        }
+        
+        // Update error count for this mode and letter
+        if (!isCorrect) {
+            errorCounts[mode][targetLetter]++;
         }
 
-        startNewAttempt(targetLetter) {
-            this.lastPromptTime = Date.now();
-            this.currentMetrics = {
-                accuracy: 0,
-                errors: {},
-                latency: 0,
-                attempts: 0,
-                mode: this.currentMetrics.mode,
-                timestamp: 0,
-                currentTarget: targetLetter,
-                correct: false
-            };
+        const errorCount = errorCounts[mode][targetLetter];
+        
+        // Update attempt counts
+        totalInputs++;
+        if (isCorrect) correctInputs++;
+        
+        // Calculate cumulative accuracy
+        const accuracy = totalInputs > 0 ? (correctInputs / totalInputs) * 100 : 0;        
+        sessionData.push({
+            SessionID: sessionStartTime,
+            Timestamp: timestamp,
+            Mode: mode,
+            Accuracy: accuracy.toFixed(2),
+            Latency: latency,
+            Attempts: currentAttempts[targetLetter],
+            TargetLetter: targetLetter.toUpperCase(),
+            Input: input.toUpperCase(),
+            Correct: isCorrect,
+            ErrorCount: errorCount
+        });
+        
+        if (isCorrect) {
+            currentAttempts[targetLetter] = 0;
+        }
+    }
+
+    // Export to CSV
+    function exportToCSV() {
+        if (sessionData.length === 0) {
+            alert("No data available to export");
+            return;
         }
 
-        recordResponse(isCorrect, actualInput) {
-            const responseTime = Date.now();
-            this.currentMetrics.latency = responseTime - this.lastPromptTime;
-            this.currentMetrics.attempts++;
-            this.currentMetrics.correct = isCorrect;
-            
-            if (!isCorrect) {
-                const target = this.currentMetrics.currentTarget;
-                if (!this.currentMetrics.errors[target]) {
-                    this.currentMetrics.errors[target] = {};
-                }
-                if (!this.currentMetrics.errors[target][actualInput]) {
-                    this.currentMetrics.errors[target][actualInput] = 0;
-                }
-                this.currentMetrics.errors[target][actualInput]++;
-            }
-        }
+        // Create CSV header
+        const headers = [
+            'SessionID',
+            'Timestamp',
+            'Mode',
+            'Accuracy (%)',
+            'Latency (ms)',
+            'Attempts',
+            'TargetLetter',
+            'Input',
+            'Correct',
+            'ErrorCount'
+        ].join(',');
+        
+        // Create CSV rows
+        const rows = sessionData.map(item => {
+            return [
+                item.SessionID,
+                `"${item.Timestamp}"`,
+                item.Mode,
+                item.Accuracy,
+                item.Latency,
+                item.Attempts,
+                item.TargetLetter,
+                item.Input,
+                item.Correct ? 'TRUE' : 'FALSE',
+                item.ErrorCount
+            ].join(',');
+        }).join('\n');
 
-        finalizeAttempt(totalInputs, correctInputs) {
-            this.currentMetrics.timestamp = Date.now();
-            this.currentMetrics.accuracy = totalInputs > 0 ? (correctInputs / totalInputs) * 100 : 0;
-            this.data.push({...this.currentMetrics});
-        }
+        // Combine header and rows
+        const csvContent = `${headers}\n${rows}`;
 
-        saveToCSV() {
-            if (this.data.length === 0) return;
-            
-            let csv = "SessionID,Timestamp,Mode,Accuracy,Latency,Attempts,TargetLetter,Input,Correct,ErrorCount\n";
-            
-            this.data.forEach(entry => {
-                const baseData = `${this.sessionId},${new Date(entry.timestamp).toISOString()},${entry.mode},` +
-                                `${entry.accuracy.toFixed(2)},${entry.latency},${entry.attempts},` +
-                                `${entry.currentTarget.toUpperCase()}`;
+        // Create download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Generate filename with timestamp
+        const now = new Date();
+        const sessionIdShort = sessionStartTime.toString().slice(-6);
+        const dateStr = now.toISOString()
+            .replace(/T/, '_')
+            .replace(/\..+/, '')
+            .replace(/:/g, '-');
+        
+        link.setAttribute('download', `Wayv_Report_${sessionIdShort}_${dateStr}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
-                if (entry.correct) {
-                    csv += `${baseData},${entry.currentTarget.toUpperCase()},TRUE,0\n`;
-                } else {
-                    Object.entries(entry.errors[entry.currentTarget] || {}).forEach(([input, count]) => {
-                        csv += `${baseData},${input.toUpperCase()},FALSE,${count}\n`;
-                    });
-                }
-            });
-
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.setAttribute('hidden', '');
-            a.setAttribute('href', url);
-            a.setAttribute('download', `wayv_data_${this.sessionId}.csv`);
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
+    // Add download button
+    function addDownloadButton() {
+        const btn = document.createElement('button');
+        btn.textContent = 'Download Performance Report (CSV)';
+        btn.id = 'downloadReportBtn';
+        btn.style.position = 'fixed';
+        btn.style.bottom = '20px';
+        btn.style.right = '20px';
+        btn.style.padding = '10px 15px';
+        btn.style.backgroundColor = '#4CAF50';
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '4px';
+        btn.style.cursor = 'pointer';
+        btn.style.zIndex = '1000';
+        btn.style.fontFamily = 'Arial, sans-serif';
+        btn.style.fontSize = '14px';
+        
+        btn.addEventListener('click', exportToCSV);
+        document.body.appendChild(btn);
     }
 
     class BrailleModel {
@@ -144,10 +200,10 @@ if ("serial" in navigator) {
             this.introDone = false;
             this.reader = null;
             this.mode = "learning";
+
             this.lastInput = "";
-            this.dataCollector = new DataCollector();
-            this.lastPromptTime = 0;
-            
+            this.connectToSerial()
+
             this.currentLetterIndex = 0;
             this.correctInputs = 0;
             this.totalInputs = 0;
@@ -174,13 +230,16 @@ if ("serial" in navigator) {
             };
             this.errorCount = {};
             this.alphabet.forEach(letter => this.errorCount[letter] = 0);
-            this.errorPattern = Array(6).fill(0);
-            
             this.initializeEventListeners();
             this.initProgressChart();
             this.initializeSpeechRecognition();
             this.brailleModel = new BrailleModel();
+            this.trainingData = [];
+            this.userHistory = [];
+            this.errorPattern = Array(6).fill(0);
             this.brailleModel.initialize();
+
+            addDownloadButton();
         }
 
         initializeSpeechRecognition() {
@@ -213,7 +272,7 @@ if ("serial" in navigator) {
                 this.isListening = true;
                 this.recognition.start();
                 this.showStatus("Voice commands activated");
-                this.speak("Voice commands are now active.");
+                this.speak("Voice commands are now active. Say Learning Mode or Practice Mode to begin session, If beginner, start with Learning mode");
             }
         }
 
@@ -227,12 +286,10 @@ if ("serial" in navigator) {
 
         switchMode(newMode) {
             this.mode = newMode;
-            this.dataCollector.mode = newMode;
             document.getElementById("modeSelect").value = newMode;
             this.resetState();
             if (this.mode === "learning") {
                 this.speak(`Switching to learning mode. Let's start with letter ${this.alphabet[0].toUpperCase()}. Fold ${this.alphabetFolds[this.alphabet[0]]} for ${this.alphabet[0].toUpperCase()}.`);
-                this.lastPromptTime = Date.now();
             } else if (this.mode === "practice") {
                 this.speak("Switching to practice mode.");
                 setTimeout(() => this.announceCurrentWord(), 1000);
@@ -276,27 +333,34 @@ if ("serial" in navigator) {
                 { num: 6, desc: "right ring finger" }
             ];
         
+            console.log("Starting introduction sequence...");
             this.speak("The finger mappings are", 1000, 1.5);
             await new Promise(resolve => setTimeout(resolve, 1000));
         
             for (const finger of fingers) {
+                console.log(`Sending vibration signal for finger ${finger.num}`);
                 await new Promise(resolve => setTimeout(resolve, 500));
+        
                 try {
                     await writer.write(new TextEncoder().encode(finger.num.toString()));
+                    console.log(`Successfully sent: ${finger.num}`);
                 } catch (error) {
                     console.error(`Error sending signal for finger ${finger.num}:`, error);
                 }
+        
                 this.speak(`${finger.num} is your ${finger.desc}`, 500, 1.5);
                 await new Promise(resolve => setTimeout(resolve, 1500));
             }
         
             try {   
                 await writer.write(new TextEncoder().encode('X'));
+                console.log("End signal sent successfully.");
             } catch (error) {
                 console.error("Error sending end signal:", error);
             }
         
             writer.releaseLock();
+            console.log("Introduction sequence completed.");
         }        
 
         async readSerialData() {
@@ -313,7 +377,7 @@ if ("serial" in navigator) {
 
         handleBrailleInput(data) {
             if (!data) return;
-            if (data === this.lastInput) return; 
+            if (data === this.lastInput) return;
             this.lastInput = data;
 
             let outputText = "";
@@ -331,35 +395,32 @@ if ("serial" in navigator) {
 
         handleLearningMode(data) {
             const currentLetter = this.alphabet[this.currentLetterIndex];
-            this.dataCollector.startNewAttempt(currentLetter);
+            const isCorrect = data.toLowerCase() === currentLetter;
             
-            if (data.toLowerCase() === currentLetter) {
-                this.speak(`Correct! ${currentLetter.toUpperCase()}`);
+            recordAttempt(this.mode, currentLetter, data, isCorrect);
+            
+            if (isCorrect) {
+                this.speak(`It is Correct!`);
                 this.correctInputs++;
-                this.dataCollector.recordResponse(true, data.toLowerCase());
                 this.currentLetterIndex++;
                 if (this.currentLetterIndex < this.alphabet.length) {
                     const nextLetter = this.alphabet[this.currentLetterIndex];
+                    audioEndTime = Date.now();
                     this.speak(`Now try ${nextLetter.toUpperCase()}. Fold ${this.alphabetFolds[nextLetter]}.`);
-                    this.lastPromptTime = Date.now();
                 } else {
                     this.speak("Completed alphabet! Switching to practice mode.");
                     this.switchMode("practice");
                 }
             } else {
-                this.speak(`Incorrect. You entered ${data.toUpperCase()} instead of ${currentLetter.toUpperCase()}. Fold ${this.alphabetFolds[currentLetter]} for ${currentLetter.toUpperCase()}.`);
-                this.dataCollector.recordResponse(false, data.toLowerCase());
+                this.speak(`It is Incorrect. Please fold ${this.alphabetFolds[currentLetter]} for ${currentLetter.toUpperCase()}.`);
                 this.errorCount[currentLetter]++;
-                const dots = this.alphabetFolds[currentLetter].match(/\d/g);
-                dots.forEach(d => this.errorPattern[parseInt(d)-1]++);
+                this.updateHeatmap();
+                audioEndTime = Date.now();
             }
             this.totalInputs++;
             this.updateProgressChart();
-            this.updateHeatmap();
-            this.dataCollector.finalizeAttempt(this.totalInputs, this.correctInputs);
             return currentLetter.toUpperCase();
         }
-
 
         updateHeatmap() {
             const ctx = document.getElementById('heatmapChart').getContext('2d');
@@ -408,14 +469,14 @@ if ("serial" in navigator) {
         handlePracticeMode(data) {
             const currentWord = this.words[this.currentWordIndex];
             const currentLetter = currentWord[this.currentWordLetterIndex];
-            this.dataCollector.startNewAttempt(currentLetter);
+            const isCorrect = data.toLowerCase() === currentLetter;
             
-            if (data.toLowerCase() === currentLetter) {
-                this.speak(`Correct! ${currentLetter.toUpperCase()}`);
+            recordAttempt(this.mode, currentLetter, data, isCorrect);
+            
+            if (isCorrect) {
+                this.speak(currentLetter.toUpperCase());
                 this.currentWordLetterIndex++;
                 this.correctInputs++;
-                this.dataCollector.recordResponse(true, data.toLowerCase());
-                
                 if (this.currentWordLetterIndex === currentWord.length) {
                     this.speak(`Excellent! Completed ${currentWord.toUpperCase()}`);
                     this.currentWordIndex = (this.currentWordIndex + 1) % this.words.length;
@@ -423,21 +484,18 @@ if ("serial" in navigator) {
                     setTimeout(() => this.announceCurrentWord(), 2000);
                 }
             } else {
-                this.speak(`Incorrect. You entered ${data.toUpperCase()} instead of ${currentLetter.toUpperCase()}. Try again.`);
-                this.dataCollector.recordResponse(false, data.toLowerCase());
+                this.speak(`Incorrect, try again.`);
                 this.errorCount[currentLetter]++;
+                this.updateHeatmap();
                 this.currentWordLetterIndex = 0;
                 setTimeout(() => this.announceCurrentWord(), 2000);
             }
             this.totalInputs++;
             this.updateProgressChart();
-            this.updateHeatmap();
-            this.dataCollector.finalizeAttempt(this.totalInputs, this.correctInputs);
             return currentWord.substring(0, this.currentWordLetterIndex).toUpperCase();
         }
 
         announceCurrentWord() {
-            this.lastPromptTime = Date.now();
             const currentWord = this.words[this.currentWordIndex];
             const letters = currentWord.toUpperCase().split('');
             this.speak(`Practice word: ${currentWord.toUpperCase()}`);
@@ -446,8 +504,8 @@ if ("serial" in navigator) {
                     this.speak(letter);
                     if (index === letters.length - 1) {
                         setTimeout(() => {
+                            audioEndTime = Date.now();
                             this.speak(`Start with ${this.alphabetFolds[currentWord[0]]} for ${currentWord[0].toUpperCase()}`);
-                            this.lastPromptTime = Date.now();
                         }, 1000);
                     }
                 }, (index + 1) * 1000);
@@ -529,12 +587,6 @@ if ("serial" in navigator) {
             document.getElementById("modeSelect").addEventListener("change", (event) => {
                 this.switchMode(event.target.value);
             });
-
-            const downloadBtn = document.createElement('button');
-            downloadBtn.id = "downloadData";
-            downloadBtn.textContent = "Download Test Data";
-            downloadBtn.addEventListener('click', () => this.dataCollector.saveToCSV());
-            document.body.appendChild(downloadBtn);
         }
     }
 
